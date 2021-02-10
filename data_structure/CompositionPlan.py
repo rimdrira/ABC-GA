@@ -150,7 +150,7 @@ class CompositionPlan:
         drel = qos['reliability'] >= constraints['reliability']
 
         return drt and dpr and dav and drel
-    
+
     # generate random service
 
     def randomService(self) :
