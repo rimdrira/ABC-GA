@@ -1,17 +1,25 @@
 from math import inf
-from random import sample, uniform
-from numpy.random import choice
+from random import sample, randint, random
 from data_structure.CompositionPlan import CompositionPlan
 from data_structure.Solution import Solution
 from genetic_operations.implementation import mutate
 from mono_objective_algorithms.algorithms.operations.fitness import fit 
 from mono_objective_algorithms.algorithms.operations.update import updateBest , updateMinMax
 
-
+def chooseNeighbor(sol , problem , best_solution) :
+    service = sol.cp.randomService()
+    xi = problem.getCandidates()[service.getActivity()].index(service)
+    N = len(problem.getCandidates()[service.getActivity()]) - 1
+    y = best_solution.cp.getService(service.getActivity())
+    yi = problem.getCandidates()[service.getActivity()].index(y)
+    vi = xi + randint(-1, 1) * (xi - randint(0, N)) + randint(0, 2) * (yi - xi)
+    vi = max(vi, 0)
+    vi = min(N, vi)
+    return problem.getCandidates()[service.getActivity()][vi]
 
 # SN : n of ressources , SQ : condition for scouts , MCN : number of iterations , N : n of bees 
 
-def ABC(problem, SN, SQ, MCN, N):
+def DGABC(problem, SN, SQ, MCN, N):
 
     # solutions initializing
     solutionsList = list()
@@ -47,11 +55,7 @@ def ABC(problem, SN, SQ, MCN, N):
         for sol in exploited:
             while 1:
                     # choose randomly a service to mutate
-                    service = sol.cp.randomService()
-                    while 1:
-                        neighbor = choice(problem.getCandidates()[service.getActivity()])
-                        if neighbor != service:
-                            break
+                    neighbor = chooseNeighbor(sol , problem , best_solution)
                     # mutation operation
                     new = mutate(sol.cp, neighbor)
                     if new.verifyConstraints(problem.getConstraints()):
@@ -71,36 +75,27 @@ def ABC(problem, SN, SQ, MCN, N):
         updateBest(solutionsList, best_solution)
 
         # Probability update
-        s = sum([sol.fitness for sol in solutionsList])
         for sol in exploited:
-            sol.probability = sol.fitness / s
+            sol.probability = (sol.fitness * 0.9 / max([sol.fitness for sol in solutionsList])) * 0.1
 
         # onlooker bees phase
-        probabilityList = [sol.probability for sol in solutionsList]
-        a = min(probabilityList)
-        b = max(probabilityList)
         for sol in exploited:
-            if sol.probability >= uniform(a,b):
-                while 1:
-                    # choose randomly a service to mutate
-                    service = sol.cp.randomService()
-                    while 1:
-                        neighbor = choice(problem.getCandidates()[service.getActivity()])
-                        if neighbor != service:
-                            break
-                    # mutation operation
-                    new = mutate(sol.cp, neighbor)
-                    if new.verifyConstraints(problem.getConstraints()):
-                        new_fitness = fit(new, minQos, maxQos, problem.getWeights())
-                        # checking if new fitness is better than parent fitness
-                        if new_fitness > sol.fitness:
-                            sol.cp = new
-                            sol.fitness = new_fitness 
-                            sol.probability = 0 
-                            sol.limit = 0
-                        else:
-                            sol.limit += 1
-                        break
+            if random() <= sol.probability  :
+                # choose randomly a service to mutate
+                neighbor = chooseNeighbor(sol , problem , best_solution)
+                # mutation operation
+                new = mutate(sol.cp, neighbor)
+                if new.verifyConstraints(problem.getConstraints()):
+                    new_fitness = fit(new, minQos, maxQos, problem.getWeights())
+                    # checking if new fitness is better than parent fitness
+                    if new_fitness > sol.fitness:
+                        sol.cp = new
+                        sol.fitness = new_fitness
+                        sol.probability = 0
+                        sol.limit = 0
+                    else:
+                        sol.limit += 1
+                    break
         # end of onlooker bees phase
 
         # scout bees phase
@@ -108,9 +103,9 @@ def ABC(problem, SN, SQ, MCN, N):
             if sol.limit >= SQ:  # verifying scouts condition
                 # searching for new ressources to exploit
                 while 1:
-                    random = CompositionPlan(problem.getActGraph(), problem.getCandidates())
-                    if random.verifyConstraints(problem.getConstraints()):
-                        sol.cp = random
+                    r = CompositionPlan(problem.getActGraph(), problem.getCandidates())
+                    if r.verifyConstraints(problem.getConstraints()):
+                        sol.cp = r
                         sol.fitness = fit(sol.cp, minQos, maxQos, problem.getWeights())
                         sol.probability = 0
                         sol.limit = 0
